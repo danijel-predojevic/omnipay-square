@@ -59,15 +59,22 @@ class ChargeRequest extends AbstractRequest
 		return $this->setParameter('meta_data', $value);
 	}
 
+	public function getIdempotencyKey() {
+		return $this->getParameter('idempotency_key');
+	}
+
+	public function setIdempotencyKey($value) {
+		return $this->setParameter('idempotency_key', $value);
+	}
+
 	public function getData()
 	{
 		$required_fields = array(
-			'idempotency_key' => uniqid(),
+			'idempotency_key' => $this->getIdempotencyKey(),
 			'amount_money' => new SquareConnect\Model\Money(array(
 				'amount' => $this->getParameter('amount'),
 				'currency' => $this->getParameter('currency')
 			)),
-			'card_nonce' => $this->getParameter('card_nonce')
 		);
 
 		$data = array_merge(
@@ -96,14 +103,6 @@ class ChargeRequest extends AbstractRequest
 				$data['amount'] = $value->getAmountMoney()->getAmount();
 				$data['currency'] = $value->getAmountMoney()->getCurrency();
 
-				if($value->getType() == 'CARD') {
-					$card = $value->getCardDetails()->getCard();
-					$data['card_details'] = [
-						'last_4' => $card->getLast4(),
-						'hash' => $card->getFingerprint(),
-					];
-				}
-
 				array_push($orders, $data);
 			}
 
@@ -124,22 +123,15 @@ class ChargeRequest extends AbstractRequest
 			}
 
 			return $this->createResponse($response);
-		} catch (SquareConnect\ApiException $e) {
-			$response = array(
-				'status' => false,
-				'message' => '',
-			);
+		} catch (\Exception $e) {
+			report($e);
 
-			foreach ( $e->getResponseBody()->errors as $error ) {
-				$response['message'] .= $error->detail . PHP_EOL;
-			}
+			$response = array(
+				'status' => 'error',
+				'message' => 'Something went wrong while trying to charge you card. Please try again or contact support if the problem persists.',
+			);
 
 			return $this->createResponse($response);
-		} catch(\Exception $e) {
-			return array(
-				'status' => false,
-				'message' => 'Something went wrong when trying to charge you card. Please try again.',
-			);
 		}
 	}
 
